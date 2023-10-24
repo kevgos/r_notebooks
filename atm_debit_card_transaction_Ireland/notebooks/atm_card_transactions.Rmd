@@ -1,0 +1,133 @@
+---
+title: "Frequency of ATM Withdrawals and Debit Card Transactions in Ireland"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+## Aim of this report
+
+The aim of this report is to investigate if the frequency of ATM withdrawals or point of sale (POS) is highest during a certain month of the year. 
+
+I also investigate if there is a day of the week associated with higher frequency of ATM withdrawals or debit card transactions.
+
+## Data Source
+
+Monthly ATM and POS transactions 2015-2023 downloaded from Central Bank of Ireland website:
+
+https://www.centralbank.ie/statistics/data-and-analysis/monthly-card-payment-statistics
+
+Daily ATM withdrawals and debit card transactions 2020 downloaded from the data government web portal:
+
+https://data.gov.ie/dataset/cbm03-detailed-daily-card-payments/resource/b1c6d2ac-8e97-4d91-9703-d46c0e2df9e0
+
+## Results
+
+**Monthly ATM withdrawals and POS transactions from 2015 to 2023**
+
+It can be seen from box plots displaying monthly ATM withdrawals and POS transactions (Figure 1 and Figure 2, respectively) that the frequency of both events is highest during the month of December.
+
+**Daily ATM withdrawals and debit card transactions in 2020**
+
+For both ATM withdrawals and debit card transactions the day of Friday has the highest frequency (Figure 3 and 4, respectively). Sunday has the lowest frequency of these activities.
+
+## Conclusions
+
+**Monthly Transactions:**
+
+The highest frequency of ATM withdrawals and POS transactions occurs in the month of December. This surge in activity is likely because of Christmas and holiday expenditures.
+
+**Daily Transactions:**
+
+On a daily basis, the data reveals that both ATM withdrawals and debit card transactions reach their peak frequency on Fridays. This trend is consistent with the typical spending patterns of individuals who prepare for the weekend or go out on Friday nights. It suggests that Fridays are significant in terms of financial transactions, aligning with the weekend's social and recreational activities.
+
+Sunday has the lowest amount of ATM withdrawals and debit card transactions. This is in line with the reduced amount of business activity on Sunday and it being a day that many enjoy leisure activities.
+
+
+```{r message=FALSE}
+# load libraries
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+```
+```{r}
+# load in the monthly ATM and POS transaction data from Central Bank of Ireland
+monthly_transactions = read.csv("../data/monthly_atm_pos_transactions.csv", header = TRUE)
+
+# look at data types
+str(monthly_transactions)
+```
+
+```{r}
+# get the months in order for plotting
+custom_month_order <- c(
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+)
+
+# Convert the "month" column to a factor with the custom order
+monthly_transactions$month <- factor(monthly_transactions$month, levels = custom_month_order)
+
+# plot the monthly transactions summary
+ggplot(monthly_transactions, aes(x = month, y = ATM.transactions, fill = month)) +
+  geom_boxplot() +
+  labs(title = "Monthly ATM Withdrawals 2015 - 2023", x = "Date", y = "Amount of Withdrawals") +  scale_fill_manual(values = rainbow(length(custom_month_order))) + labs(caption = "Figure 1. Total ATM withdrawals per month from January 2015 to March 2023.") +
+  theme(plot.caption.position = "plot",
+        plot.caption = element_text(hjust = 0.5))
+
+```
+```{r}
+# plot the monthly transactions summary
+ggplot(monthly_transactions, aes(x = month, y = POS.transactions, fill = month)) +
+  geom_boxplot() +
+  labs(title = "Monthly POS Transactions 2015 - 2023", x = "Date", y = "Amount of Transactions") +  scale_fill_manual(values = rainbow(length(custom_month_order))) + labs(caption = "Figure 2. Total POS transactions per month from January 2015 to March 2023.") +
+  theme(plot.caption.position = "plot",
+        plot.caption = element_text(hjust = 0.5))
+```
+```{r}
+# load in the daily data for ATM withdrawals and debit card transactions in 2020
+daily_transactions = read.csv("../data/daily_atm_debit_2020.csv", header = TRUE)
+
+# look at data types
+str(daily_transactions)
+```
+
+```{r}
+# want to change the date to datetime format and add in a 'day' column to look at days, can use lubridate package
+daily_transactions <- daily_transactions %>%
+  mutate(date = parse_date_time(date, orders = "YBd"))
+
+# look at data types again to make sure its in the right format
+str(daily_transactions)
+```
+
+```{r}
+# create a new column for day using datetime function of the date column
+daily_transactions <- daily_transactions %>%
+  mutate(DayOfWeek = wday(date, label = TRUE, abbr = TRUE))
+
+# get the days in an order for plotting
+custom_day_order <- c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+# Convert the "DayOfWeek" column to a factor with the custom order
+daily_transactions$DayOfWeek <- factor(daily_transactions$DayOfWeek, levels = custom_day_order)
+```
+
+```{r}
+# plot the daily transactions summary
+ggplot(daily_transactions, aes(x = DayOfWeek, y = atm_withdrawals, fill = DayOfWeek)) +
+  geom_boxplot() +
+  labs(title = "Daily ATM Withdrawals 2020", x = "Day", y = "Amount of Withdrawals") +  scale_fill_manual(values = rainbow(length(custom_day_order))) + labs(caption = "Figure 3. Total daily ATM withdrawals from March to November 2020.") +
+  theme(plot.caption.position = "plot",
+        plot.caption = element_text(hjust = 0.5))
+```
+```{r}
+# plot the daily transactions summary
+ggplot(daily_transactions, aes(x = DayOfWeek, y = debit_card_trans, fill = DayOfWeek)) +
+  geom_boxplot() +
+  labs(title = "Daily Debit Card Transactions 2020", x = "Day", y = "Amount of Transactions") +  scale_fill_manual(values = rainbow(length(custom_day_order))) + labs(caption = "Figure 4. Total daily debit card transactions from March to November 2020.") +
+  theme(plot.caption.position = "plot",
+        plot.caption = element_text(hjust = 0.5))
+```
