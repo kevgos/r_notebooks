@@ -1,0 +1,161 @@
+---
+title: <center> <h1>Average Irish Water Usage from 2015 - 2021</h1> </center>
+output:
+  html_document:
+    df_print: paged
+---
+
+## Aim of this report
+
+The aim of this report is to investigate the average daily amount of water used per meter in Ireland by month and by county from the period 2015 to 2021.
+
+## Data Source
+
+Data for monthly and County water usage are available from the CSO:
+
+https://www.cso.ie/en/index.html
+
+Downloaded data are available in the 'data' directory.
+
+## Results
+
+**Monthly Water Usage**
+
+The analysis of monthly water usage data revealed interesting trends in water consumption. Two distinct patterns were observed over the course of a year.
+
+ - **Seasonal Variability:** The highest average monthly water usage was recorded in May and June. This seasonal peak in water consumption can be attributed to several factors. In many regions, these months coincide with the arrival of warmer weather, leading to an increase in outdoor activities, such as gardening and outdoor water use. Additionally, people tend to use more water during the summer for recreational purposes, such as filling swimming pools or running lawn sprinklers. This surge in water demand during the warmer months underscores the importance of water resource management and infrastructure planning to meet the needs of the population during peak periods.
+
+ - **Low-Usage Months:** In contrast, the lowest average water usage months were observed from November to January. During these months, lower water consumption can be attributed to cooler temperatures and reduced outdoor water use. In some cases, conservation efforts, including water restrictions or awareness campaigns, may contribute to decreased consumption in the colder months.
+
+
+**Water Usage by County**
+
+A striking observation is that the counties with the highest average water usage were concentrated in the midlands and eastern regions (Figure 2). Several factors may contribute to this phenomenon including agricultural/industrial activity or geographic factors within these specific areas. 
+
+
+## Conclusions
+To ensure a sustainable and reliable water supply, several key points should be considered:
+
+Infrastructure Assessment: Water supply infrastructure in counties with high water usage should be closely examined. This includes assessing the capacity of water treatment plants, pipelines, and distribution systems to meet peak demand during the summer months.
+
+Seasonal Considerations: Seasonal patterns of water consumption, with peaks in summer, should be taken into account. Water utilities should develop strategies to address the increased demand during warmer periods, such as optimizing storage capacity and distribution.
+
+
+# Notebook
+
+## Investigating Monthly Water Usage, 2015 - 2021
+
+```{r message=FALSE}
+# load libraries
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(csodata)
+library(tmap)
+library(sf)
+
+```
+
+```{r}
+# load in the monthly averages of water usage from metered locations
+mean_usage <- read.csv("../data/mean_avg_metered_monthly.csv", header = TRUE)
+
+# look at data types, will get error because the data columns start with numeric 2015 etc
+str(mean_usage)
+```
+```{r}
+# easier to work in long format so reshape 
+mean_usage <- mean_usage %>% gather(key = "Year", value = "Value", -Month)
+
+# remove 'X' from year names
+mean_usage$Year <- as.numeric(sub("X", "", mean_usage$Year))
+```
+
+```{r}
+# get the months in order for plotting
+custom_month_order <- c(
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+)
+
+# Convert the "month" column to a factor with the custom order
+mean_usage$Month <- factor(mean_usage$Month, levels = custom_month_order)
+
+# plot the monthly transactions summary
+ggplot(mean_usage, aes(x = Month, y = Value, fill = Month)) +
+  geom_boxplot() +
+  labs(title = "Monthly Mean Avg. Water Consumption 2015 - 2021", x = "Month", y = "Daily liters per meter") +  scale_fill_manual(values = rainbow(length(custom_month_order))) + labs(caption = "Figure 1. Monthly Mean Avg. Water Consumption in daily liters per meter 2015 - 2021.") +
+  theme(plot.caption.position = "plot",
+        plot.caption = element_text(hjust = 0.5))
+```
+
+
+```{r}
+# List of file paths
+file_paths <- c(
+  "../data/county_monthly/county_monthly_2015.csv",
+  "../data/county_monthly/county_monthly_2016.csv",
+  "../data/county_monthly/county_monthly_2017.csv",
+  "../data/county_monthly/county_monthly_2018.csv",
+  "../data/county_monthly/county_monthly_2019.csv",
+  "../data/county_monthly/county_monthly_2020.csv",
+  "../data/county_monthly/county_monthly_2021.csv"
+)
+
+# Read the CSV files into a list of data frames
+list_of_df <- lapply(file_paths, function(file_path) {
+  df <- read.csv(file_path, header = TRUE)
+  # Ensure all month columns are character
+  df <- df %>%
+    mutate(across(starts_with("Jan"):ends_with("Dec"), as.character)) %>%
+    pivot_longer(cols = -County, names_to = "Month", values_to = "Value")
+  return(df)
+})
+
+# Add the 'Year' column to each dataframe
+years <- 2015:2021
+for (i in 1:length(list_of_df)) {
+  list_of_df[[i]]$Year <- years[i]
+}
+
+# Concatenate all data frames in the list
+combined_df <- do.call(rbind, list_of_df)
+
+# Convert the "Value" column to numeric, replace all non-numeric values with NA
+combined_df <- combined_df %>%
+  mutate(Value = as.numeric(Value))
+
+# Group by 'County' and calculate the average values
+average_df <- combined_df %>%
+  group_by(County) %>%
+  summarise(Avg_Value = mean(Value, na.rm = TRUE))
+
+# change Laois to Laoghis for plotting, geo data 
+average_df <- average_df %>%
+  mutate(County = ifelse(County == "Laois", "Laoighis", County))
+
+# Print the first few rows of the resulting data frame
+head(average_df)
+```
+
+```{r}
+# plotting choropleth, load in shapefile
+county_sf <- st_read("../data/IRL_adm/IRL_adm1.shp")
+
+# merge by county with geospatial dataframe
+merged_data <- merge(county_sf, average_df, by.x = "NAME_1", by.y = "County", all.x = TRUE)
+
+```
+
+```{r, fig.width=8, fig.height=6}
+
+# Create a choropleth map
+tm_shape(merged_data) +
+  tm_borders() +  # Add county borders
+  tm_fill(col = "Avg_Value", style = "fisher", title = "Daily Water Usage (litres) 2015 - 2021") + tm_legend(outside = TRUE) + 
+  tm_text("NAME_1", size = 0.6) +
+  tm_credits("Figure 2.", fontface = "bold") +
+  tm_layout(main.title = "Daily Water Usage by County 2015 - 2021",
+            main.title.fontface = "bold")
+
+```
